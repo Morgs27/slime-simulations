@@ -12,7 +12,7 @@ function App() {
 
   var agents: Agent[] = [];
 
-  const agentTotal = 1;
+  const agentTotal = 2000;
   const agentSize = 2;
   const agentColour = 'rgba(255,255,255,1)';
   const agentTrailLength = 500
@@ -33,6 +33,12 @@ function App() {
 
   }
 
+  let sensorOffset = 7
+  let sensorSize = 3
+  let sensorOffsetAngle = Math.PI / 3
+  let delayFactor = 0
+  let turnSpeed = 0.6
+
   function updateAgentPositions(ctx: any){
 
     agents = agents.map((agent:Agent, index: number) => {
@@ -43,49 +49,39 @@ function App() {
       let newAngle = agent.angle
 
       // Update Position Based on trails
-      function senseCone(x: number, y: number, angle: number){
+      let sensorCenter = {x:agent.position.x + Math.cos(agent.angle) * (sensorOffset + delayFactor), y: agent.position.y + Math.sin(agent.angle) * (sensorOffset + delayFactor)}
+      let sensorRight = {x: agent.position.x + Math.cos(agent.angle + sensorOffsetAngle) * (sensorOffset + delayFactor), y: agent.position.y + Math.sin(agent.angle + sensorOffsetAngle) * (sensorOffset + delayFactor)}
+      let sensorLeft = {x: agent.position.x + Math.cos(agent.angle - sensorOffsetAngle) * (sensorOffset + delayFactor), y: agent.position.y + Math.sin(agent.angle - sensorOffsetAngle) * (sensorOffset + delayFactor)}
 
-        
-        let senseAngle = Math.PI
+      let scoreCenter = scoreCircle(sensorCenter, ctx);
+      let scoreRight = scoreCircle(sensorRight, ctx);
+      let scoreLeft = scoreCircle(sensorLeft, ctx);
 
+      let randomSteerStrength = Math.random() * (Math.PI / 3) * turnSpeed;
+
+      // Stay Straight
+      if (scoreCenter < scoreRight && scoreCenter < scoreRight){
 
       }
-
-      function getPixelData(imageData: any, x: number, y:number) {
-        var index = (x + y * imageData.width) * 4;
-        return [
-          imageData.data[index + 0],
-          imageData.data[index + 1],
-          imageData.data[index + 2],
-          imageData.data[index + 3],
-        ];
-      }
-
-      function getColorsInTriangle(x:number, y:number, size: number, angle:number) {
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(angle - Math.PI / 2);
-        var imageData = ctx.getImageData(-10, 0, 20, 10, {colourSpace: 'srbg'});
-        ctx.restore();
-
-        var colors = []
-        for (var i = 0; i < imageData.width; i++) {
-          for (var j = 0; j < imageData.height; j++) {
-              colors.push(getPixelData(imageData, i, j));
-          }
+      // Random Direction
+      else if (scoreCenter > scoreRight && scoreCenter > scoreRight){
+        if (Math.random() > 0.5){
+          newAngle = agent.angle + randomSteerStrength;
         }
-
-        return colors;
+        else {
+          newAngle = agent.angle - randomSteerStrength;
+        }
       }
+      // Turn Right
+      else if (scoreRight < scoreRight){
+        newAngle = agent.angle - randomSteerStrength;
+      }
+      // Turn Left
+      else if (scoreLeft < scoreRight){
+        newAngle = agent.angle + randomSteerStrength;
+      }
+      else {
 
-      // var colors = getColorsInTriangle(agent.position.x, agent.position.y, 10, agent.angle);
-      // var colors = getColorsInTriangle(agent.position.x, agent.position.y, 100, agent.angle);
-      // var colors = getColorsInTriangle(agent.position.x, agent.position.y, 100, agent.angle);
-
-
-      if(index == 0){
-        var colors = getColorsInTriangle(agent.position.x, agent.position.y, 10, agent.angle);
-        console.log(colors)
       }
 
       // If the new Position is out of bounds give the agent a new random angle
@@ -104,15 +100,51 @@ function App() {
 
   }
 
+  function scoreCircle(center: {x: number, y: number}, ctx: any){
+
+    var imageData = ctx.getImageData(center.x - sensorSize, center.y - sensorSize, sensorSize * 2, sensorSize * 2, {});
+    var score = 0;
+    // console.log(imageData)
+    for (var i = 0; i < imageData.width; i++) {
+      for (var j = 0; j < imageData.height; j++) {
+        var distance = Math.sqrt((i - sensorSize) * (i - sensorSize) + (j - sensorSize) * (j - sensorSize));
+        if (distance <= sensorSize) {
+
+          // if (Math.random() < 0.0001){
+          //   console.log(getPixelData(imageData, i, j))
+          // }
+          score += Math.sqrt(
+            Math.pow( (imageData.data[(( i + j * imageData.width) * 4) + 0] ) - 255, 2) +
+            Math.pow( (imageData.data[(( i + j * imageData.width) * 4) + 1] ) - 255, 2) +
+            Math.pow( (imageData.data[(( i + j * imageData.width) * 4) + 2] ) - 255, 2)
+          )
+        }
+      }
+    }
+    return score;
+  }
+
+  function getPixelData(imageData: any, x: number, y:number) {
+    var index = (x + y * imageData.width) * 4;
+    return [
+      imageData.data[index + 0],
+      imageData.data[index + 1],
+      imageData.data[index + 2],
+      imageData.data[index + 3],
+    ];
+  }
+
+
   function animationLoop(){
 
     const canvaseElm = document.getElementById('canvas') as HTMLCanvasElement;
-    const ctx = canvaseElm?.getContext("2d");
+    const ctx = canvaseElm?.getContext("2d", {willReadFrequently: true});
+
+    blurScreen(ctx)
 
     updateAgentPositions(ctx)
 
     // ctx?.clearRect(0,0,screenDimensions.x,screenDimensions.y)
-    blurScreen(ctx)
 
     drawAgents(ctx)
 
@@ -123,7 +155,7 @@ function App() {
 
   function blurScreen(ctx: any) {
 
-    ctx.fillStyle = 'rgba(0,0,0,0.01)';
+    ctx.fillStyle = 'rgba(0,0,0,0.06)';
     ctx.fillRect(0,0,screenDimensions.x,screenDimensions.y);
 
   }
@@ -131,25 +163,25 @@ function App() {
 
   function drawTriangle(x:number, y:number, size:number, angle:number, ctx:any) {
 
-    ctx.fillStyle = 'rgba(255,255,0,0.1)'
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(angle - Math.PI / 2);
+
+    let sensorCenter = {x: x + Math.cos(angle) * sensorOffset, y: y + Math.sin(angle) * sensorOffset}
+    let sensorRight = {x: x + Math.cos(angle + sensorOffsetAngle) * sensorOffset, y: y + Math.sin(angle + sensorOffsetAngle) * sensorOffset}
+    let sensorLeft = {x: x + Math.cos(angle - sensorOffsetAngle) * sensorOffset, y: y + Math.sin(angle - sensorOffsetAngle) * sensorOffset}
+
+    ctx.fillStyle = 'rgba(255,0,0,1)';
     ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(-size, size);
-    ctx.lineTo(size, size);
-    ctx.closePath();
+    ctx.arc(sensorCenter.x , sensorCenter.y , sensorSize, 0, 2 * Math.PI);
     ctx.fill();
-    ctx.restore();
 
+    ctx.fillStyle = 'rgba(0,255,0,1)';
+    ctx.beginPath();
+    ctx.arc(sensorLeft.x , sensorLeft.y , sensorSize, 0, 2 * Math.PI);
+    ctx.fill();
 
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(angle - Math.PI / 2);
-    ctx.fillStyle = 'rgba(255,0,0,0.1)'
-    ctx.fillRect(-size, 0, size * 2, size);
-    ctx.restore();
+    ctx.fillStyle = 'rgba(0,0,255,1)';
+    ctx.beginPath();
+    ctx.arc(sensorRight.x , sensorRight.y , sensorSize, 0, 2 * Math.PI);
+    ctx.fill();
   }
 
   function drawAgents(ctx: any){
@@ -163,7 +195,7 @@ function App() {
       ctx.fillRect(agent.position.x,agent.position.y,agentSize,agentSize);
 
       // Draw Field of View
-      drawTriangle(agent.position.x, agent.position.y, 100, agent.angle, ctx)
+      // drawTriangle(agent.position.x, agent.position.y, 100, agent.angle, ctx)
 
     })
 
